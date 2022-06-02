@@ -11,12 +11,10 @@ public class Manufacturer extends PanacheEntity {
 	public String name;
 	public String img;
 
-	public Manufacturer(long id) {
-		super.id = id;
-	}
+	public Manufacturer() {}
 
 	@JsonCreator
-	public static Manufacturer factory(int id) {
-		return (Manufacturer) findById(id).await().indefinitely();
+	public Manufacturer(String name) {
+		this.name = name;
 	}
 }

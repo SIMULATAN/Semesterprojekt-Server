@@ -10,6 +10,8 @@ import javax.persistence.ManyToOne;
 
 @Entity
 public class RAM extends PanacheEntity {
+	String name;
+	String img;
 	public int speed;
 	/**
 	 * In kilobytes

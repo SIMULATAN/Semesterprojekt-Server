@@ -1,0 +1,58 @@
+@startuml
+class ProductDTO {
+	+ String name
+	+ long manufacturer_id
+	+ long cpu_id
+	+ long disk_id
+	+ long ram_id
+	+ String img
+}
+
+class Product {
+	+ String name
+	+ String img
+	+ Manufacturer
+	+ CPU
+	+ Disk
+	+ RAM
+}
+
+class CPU {
+	+ String name
+	+ String img
+	+ Manufacturer
+	+ int cores
+	+ int threads
+	+ int clock
+}
+
+class Disk {
+	+ String name
+	+ String img
+	+ Manufacturer
+	 \/ in bytes
+	+ int capacity
+}
+
+class RAM {
+	+ String name
+	+ String img
+	+ Manufacturer
+	+ int speed
+	+ long size
+}
+
+class Manufacturer {
+	+ String name
+	+ String img
+}
+
+Manufacturer --> Product : > has
+Manufacturer --> CPU : > has
+Manufacturer --> Disk : > has
+Manufacturer --> RAM : > has
+
+Product <-- CPU : < contains
+Product <-- Disk : < contains
+Product <-- RAM : < contains
+@enduml
