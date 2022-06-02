@@ -9,17 +9,13 @@ import com.github.simulatan.semesterprojekt_server.product.objects.components.RA
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.hibernate.reactive.panache.PanacheEntity;
 import io.smallrye.mutiny.Uni;
-import org.hibernate.boot.Metadata;
-import org.hibernate.boot.MetadataSources;
-import org.hibernate.tool.hbm2ddl.SchemaExport;
-import org.hibernate.tool.schema.TargetType;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
+import org.json.JSONObject;
 
 import javax.transaction.Transactional;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
 import java.net.URI;
-import java.util.EnumSet;
 import java.util.List;
 
 //@Authenticated
@@ -27,15 +23,35 @@ import java.util.List;
 @Consumes("application/json")
 @Produces("application/json")
 public class ManageProducts {
+
+	@GET
+	@Path("/all")
+	public Uni<JSONObject> listAll() {
+		return Panache.withTransaction(() -> {
+			var man = Manufacturer.listAll();
+			var cpu = CPU.listAll();
+			var ram = RAM.listAll();
+			var disk = Disk.listAll();
+			return Uni.combine().all()
+				.unis(man, cpu, ram, disk)
+				.asTuple()
+				.map(tuple -> new JSONObject()
+					.put("manufacturer", tuple.getItem1())
+					.put("cpu", tuple.getItem2())
+					.put("ram", tuple.getItem3())
+					.put("disk", tuple.getItem4()));
+		});
+	}
+
 	@POST
-	@Path("/product")
+	@Path("/add")
 	@Transactional
 	public Uni<Response> create(ProductDTO productDto) {
 		return createBackend(Product.createProduct(productDto));
 	}
 
 	@POST
-	@Path("/product/complete")
+	@Path("/add/complete")
 	@Transactional
 	public Uni<Response> create(Product product) {
 		return createBackend(product);
