@@ -3,13 +3,10 @@ package com.github.simulatan.semesterprojekt_server.product;
 import com.github.simulatan.semesterprojekt_server.product.objects.Manufacturer;
 import com.github.simulatan.semesterprojekt_server.product.objects.Product;
 import com.github.simulatan.semesterprojekt_server.product.objects.ProductDTO;
-import com.github.simulatan.semesterprojekt_server.product.objects.components.CPU;
-import com.github.simulatan.semesterprojekt_server.product.objects.components.Disk;
-import com.github.simulatan.semesterprojekt_server.product.objects.components.RAM;
+import com.github.simulatan.semesterprojekt_server.product.objects.components.*;
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.hibernate.reactive.panache.PanacheEntity;
 import io.smallrye.mutiny.Uni;
-import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.json.JSONObject;
 
 import javax.transaction.Transactional;
@@ -26,7 +23,7 @@ public class ManageProducts {
 
 	@GET
 	@Path("/all")
-	public Uni<JSONObject> listAll() {
+	public Uni<String> listAll() {
 		return Panache.withTransaction(() -> {
 			var man = Manufacturer.listAll();
 			var cpu = CPU.listAll();
@@ -35,23 +32,27 @@ public class ManageProducts {
 			return Uni.combine().all()
 				.unis(man, cpu, ram, disk)
 				.asTuple()
-				.map(tuple -> new JSONObject()
-					.put("manufacturer", tuple.getItem1())
-					.put("cpu", tuple.getItem2())
-					.put("ram", tuple.getItem3())
-					.put("disk", tuple.getItem4()));
+				.map(tuple ->
+					new JSONObject()
+						.put("manufacturer", tuple.getItem1())
+						.put("cpu", tuple.getItem2())
+						.put("ram", tuple.getItem3())
+						.put("disk", tuple.getItem4())
+						// jackson best lib fr
+						.toString()
+				);
 		});
 	}
 
 	@POST
-	@Path("/add")
+	@Path("/product")
 	@Transactional
 	public Uni<Response> create(ProductDTO productDto) {
 		return createBackend(Product.createProduct(productDto));
 	}
 
 	@POST
-	@Path("/add/complete")
+	@Path("/product/complete")
 	@Transactional
 	public Uni<Response> create(Product product) {
 		return createBackend(product);
@@ -73,8 +74,8 @@ public class ManageProducts {
 	@POST
 	@Path("/cpu")
 	@Transactional
-	public Uni<Response> create(CPU cpu) {
-		return createBackend(cpu);
+	public Uni<Response> create(CPUDTO cpu) {
+		return createBackend(CPU.createCPU(cpu));
 	}
 
 	@GET
@@ -86,8 +87,8 @@ public class ManageProducts {
 	@POST
 	@Path("/disk")
 	@Transactional
-	public Uni<Response> create(Disk product) {
-		return createBackend(product);
+	public Uni<Response> create(DiskDTO product) {
+		return createBackend(Disk.createDisk(product));
 	}
 
 	@GET
@@ -99,8 +100,8 @@ public class ManageProducts {
 	@POST
 	@Path("/ram")
 	@Transactional
-	public Uni<Response> create(RAM ram) {
-		return createBackend(ram);
+	public Uni<Response> create(RAMDTO ram) {
+		return createBackend(RAM.createRAM(ram));
 	}
 
 	@GET
@@ -112,18 +113,16 @@ public class ManageProducts {
 	private <T extends PanacheEntity> Uni<Response> createBackend(T item) {
 		if (item == null) return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
 		return Panache.<T>withTransaction(item::persist)
-			.onItem().transform(inserted -> Response.created(URI.create("/api/products/" + inserted.id)).build());
+			.onItem().transform(inserted -> Response.created(URI.create("/api/products/" + inserted.id)).entity(item).build());
 	}
 
-	@ServerExceptionMapper
-	public Response mapExceptionToResponse(Exception exception) {
-		if (exception instanceof WebApplicationException ex) {
-			return ex.getResponse();
-		}
-		if (exception instanceof IllegalArgumentException ex) {
-			return Response.status(Response.Status.BAD_REQUEST).entity(ex.getMessage()).build();
-		}
-
-		return Response.serverError().entity(exception.getMessage()).build();
+	private <T extends PanacheEntity> Uni<Response> createBackend(Uni<T> item) {
+		if (item == null) return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
+		return item
+			.onItem().transformToUni(i -> Panache.<T>withTransaction(i::persist))
+			.map(inserted -> Response
+				.status(Response.Status.OK)
+				.entity(inserted)
+				.build());
 	}
 }

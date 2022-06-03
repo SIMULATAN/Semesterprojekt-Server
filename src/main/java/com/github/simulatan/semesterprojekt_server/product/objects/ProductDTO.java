@@ -6,13 +6,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class ProductDTO {
 	@JsonProperty
 	public String name;
-	@JsonProperty("manufacturer_id")
+	@JsonProperty("manufacturer")
 	public long manufacturerId;
-	@JsonProperty("cpu_id")
+	@JsonProperty("cpu")
 	public long cpuId;
-	@JsonProperty("disk_id")
+	@JsonProperty("disk")
 	public long diskId;
-	@JsonProperty("ram_id")
+	@JsonProperty("ram")
 	public long ramId;
 	@JsonProperty
 	public String img;
