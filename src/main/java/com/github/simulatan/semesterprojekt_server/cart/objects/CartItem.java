@@ -1,4 +1,4 @@
-package com.github.simulatan.semesterprojekt_server.cart;
+package com.github.simulatan.semesterprojekt_server.cart.objects;
 
 import com.github.simulatan.semesterprojekt_server.product.objects.Product;
 import io.quarkus.hibernate.reactive.panache.PanacheEntity;
