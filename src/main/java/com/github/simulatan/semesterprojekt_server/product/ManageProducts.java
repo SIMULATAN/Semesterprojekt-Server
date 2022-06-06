@@ -12,7 +12,6 @@ import org.json.JSONObject;
 import javax.transaction.Transactional;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
-import java.net.URI;
 import java.util.List;
 
 //@Authenticated
@@ -113,16 +112,13 @@ public class ManageProducts {
 	private <T extends PanacheEntity> Uni<Response> createBackend(T item) {
 		if (item == null) return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
 		return Panache.<T>withTransaction(item::persist)
-			.onItem().transform(inserted -> Response.created(URI.create("/api/products/" + inserted.id)).entity(item).build());
+			.onItem().transform(inserted -> Response
+				.status(Response.Status.CREATED)
+				.entity(inserted)
+				.build());
 	}
 
 	private <T extends PanacheEntity> Uni<Response> createBackend(Uni<T> item) {
-		if (item == null) return Uni.createFrom().item(Response.status(Response.Status.BAD_REQUEST).build());
-		return item
-			.onItem().transformToUni(i -> Panache.<T>withTransaction(i::persist))
-			.map(inserted -> Response
-				.status(Response.Status.OK)
-				.entity(inserted)
-				.build());
+		return item.onItem().transformToUni(this::createBackend);
 	}
 }
