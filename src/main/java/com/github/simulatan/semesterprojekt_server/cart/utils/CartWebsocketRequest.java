@@ -26,23 +26,19 @@ public class CartWebsocketRequest {
 	}
 
 	public void error(int httpCode, String message) {
-		send("""
+		session.getAsyncRemote().sendText(String.format("""
 			{
 			  "code": %d
 			  "message": %s
-			}""", httpCode, message);
+			}""", httpCode, message));
 	}
 
-	public void send(String format, Object... args) {
-		send(String.format(format, args));
+	public void send(String action, String message) {
+		broadcast("{\"request_id\":" + requestId + ",\"action\":\"" + action + "\"" + ",\"data\":" + message + "}");
 	}
 
-	public void send(String message) {
-		broadcast("{\"request_id\":" + requestId + "," + message + "}");
-	}
-
-	public void send(CartResponseCode code) {
-		broadcast("{\"request_id\":" + requestId + ",\"code\":" + code. getCode() + ",\"message:\":\"" + code.getMessage() + "\"}");
+	public void send(String action, CartResponseCode code) {
+		broadcast("{\"request_id\":" + requestId + ",\"action\":\"" + action + "\"" + ",\"code\":" + code.getCode() + ",\"data\":\"" + code.getMessage() + "\"}");
 	}
 
 	private void broadcast(String message) {

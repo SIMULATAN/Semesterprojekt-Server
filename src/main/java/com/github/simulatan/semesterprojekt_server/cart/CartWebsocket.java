@@ -1,23 +1,16 @@
 package com.github.simulatan.semesterprojekt_server.cart;
 
-import com.github.simulatan.semesterprojekt_server.cart.objects.Cart;
 import com.github.simulatan.semesterprojekt_server.cart.utils.CartWebsocketRequest;
 import com.github.simulatan.semesterprojekt_server.cart.utils.CartWebsocketRequestCreator;
-import io.smallrye.mutiny.Uni;
 import org.jboss.logging.Logger;
 import org.json.JSONObject;
 
-import javax.enterprise.context.control.ActivateRequestContext;
 import javax.inject.Inject;
 import javax.transaction.Transactional;
-import javax.websocket.HandshakeResponse;
-import javax.websocket.OnError;
-import javax.websocket.OnMessage;
-import javax.websocket.Session;
+import javax.websocket.*;
 import javax.websocket.server.HandshakeRequest;
 import javax.websocket.server.ServerEndpoint;
 import javax.websocket.server.ServerEndpointConfig;
-import java.io.IOException;
 import java.util.*;
 
 @ServerEndpoint(value = "/api/cart/ws/{cart_id}", configurator = CartWebsocket.CartConfigurator.class)
@@ -57,41 +50,40 @@ public class CartWebsocket {
 	@Inject
 	CartManager manager;
 
+	@OnOpen
+	public void onOpen(Session session) {
+		sessions.computeIfAbsent((UUID) session.getUserProperties().get("user_id"), k -> new ArrayList<>()).add(session);
+	}
+
 	@OnMessage
 	@Transactional
 	public void onMessage(Session session, String message) {
 		LOGGER.info("Message received from " + session.getUserProperties().get("user_id"));
 		JSONObject json = new JSONObject(message);
-		Uni<CartWebsocketRequest> cartWebsocketRequestUni = creator.create(session, message);
-		cartWebsocketRequestUni.invoke(context -> {
-			System.out.println("CONTEXT: " + context);
-			if (json.has("action")) {
-				String action = json.getString("action");
-				if (action.equals("clear")) {
-					manager.clearCart(context);
-					return;
-				}
-
-				if (action.equals("add")) {
-					manager.addToCart(context, json.getLong("product_id"));
-				} else if (action.equals("remove")) {
-					manager.removeFromCart(context, json.getLong("product_id"));
-				} else {
-					context.error(404, "Unknown Action");
-				}
+		CartWebsocketRequest context = creator.create(session, message);
+		if (json.has("action")) {
+			String action = json.getString("action");
+			if (action.equals("clear")) {
+				manager.clearCart(context);
+				return;
+			} else if (action.equals("list")) {
+				manager.listCart(context);
+				return;
 			}
-		});
-	}
 
-	@ActivateRequestContext
-	private void doShit() {
-		System.out.println(Cart.findAll().firstResult().await().indefinitely());
+			switch (action) {
+				case "add" -> manager.addToCart(context, json.getLong("product_id"));
+				case "remove" -> manager.removeFromCart(context, json.getLong("cart_item_id"));
+				case "update_quantity" -> manager.updateQuantity(context, json.getInt("new_quantity"), json.getLong("cart_item_id"));
+				default -> context.error(404, "Unknown Action");
+			}
+		}
 	}
 
 	@OnError
-	public void error(Session session, Throwable exception) throws IOException {
+	public void error(Session session, Throwable exception) {
 		LOGGER.error("WebSocket error", exception);
-		// session.close(new CloseReason(CloseReason.CloseCodes.UNEXPECTED_CONDITION, exception.getMessage()));
+		session.getAsyncRemote().sendText("{\"error\":true,\"class\":\"" + exception.getClass().getName() + "\",\"message\":\"" + exception.getMessage() + "\"}");
 	}
 
 	public static void broadcast(UUID userId, String message) {
