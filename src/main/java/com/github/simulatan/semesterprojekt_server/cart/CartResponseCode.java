@@ -1,10 +1,12 @@
 package com.github.simulatan.semesterprojekt_server.cart;
 
 public enum CartResponseCode {
-	CART_CLEARED("Cart Cleared!", 10);
+	CART_CLEARED("Cart Cleared!", 10),
+	CART_ITEM_REMOVED("Cart Item removed.", 20),
+	CART_ITEM_NOT_REMOVED("Cart iteme not found.", 21);
 
 	CartResponseCode(int code) {
-		this.code = code;
+		this(null, code);
 	}
 
 	CartResponseCode(String message, int code) {

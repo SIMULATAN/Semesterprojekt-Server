@@ -1,7 +1,8 @@
-package com.github.simulatan.semesterprojekt_server.cart;
+package com.github.simulatan.semesterprojekt_server.cart.utils;
 
+import com.github.simulatan.semesterprojekt_server.cart.CartResponseCode;
+import com.github.simulatan.semesterprojekt_server.cart.CartWebsocket;
 import com.github.simulatan.semesterprojekt_server.cart.objects.Cart;
-import io.smallrye.mutiny.Uni;
 import org.json.JSONObject;
 
 import javax.websocket.Session;
@@ -14,24 +15,14 @@ public class CartWebsocketRequest {
 	public final JSONObject request;
 	public final long requestId;
 	public final Cart cart;
-	public final CartWebsocket.IBroadcastMessage broadcast;
 
-	private CartWebsocketRequest(Session session, String message, JSONObject request, Cart cart, long requestId, CartWebsocket.IBroadcastMessage broadcast) {
+	CartWebsocketRequest(Session session, String message, JSONObject request, Cart cart, long requestId) {
 		this.userId = cart.userId;
 		this.session = session;
 		this.message = message;
 		this.request = request;
 		this.requestId = requestId;
 		this.cart = cart;
-		this.broadcast = broadcast;
-	}
-
-	public static Uni<CartWebsocketRequest> create(Session session, String message, CartWebsocket.IBroadcastMessage broadcast) {
-		UUID userId = UUID.fromString((String) session.getUserProperties().get("user_id"));
-		JSONObject request = new JSONObject(message);
-		return Cart.find("userId", userId).firstResult()
-			.map(Cart.class::cast)
-			.map(cart -> new CartWebsocketRequest(session, message, request, cart, request.getLong("request_id"), broadcast));
 	}
 
 	public void error(int httpCode, String message) {
@@ -55,6 +46,6 @@ public class CartWebsocketRequest {
 	}
 
 	private void broadcast(String message) {
-		broadcast.broadcast(userId, message);
+		CartWebsocket.broadcast(userId, message);
 	}
 }
