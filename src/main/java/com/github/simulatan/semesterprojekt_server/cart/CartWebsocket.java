@@ -72,7 +72,6 @@ public class CartWebsocket {
 			}
 
 			switch (action) {
-				case "add" -> manager.addToCart(context, json.getLong("product_id"));
 				case "remove" -> manager.removeFromCart(context, json.getLong("cart_item_id"));
 				case "update_quantity" -> manager.updateQuantity(context, json.getInt("new_quantity"), json.getLong("cart_item_id"));
 				default -> context.error(404, "Unknown Action");

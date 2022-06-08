@@ -2,21 +2,27 @@ package com.github.simulatan.semesterprojekt_server.cart;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.simulatan.semesterprojekt_server.cart.objects.Cart;
 import com.github.simulatan.semesterprojekt_server.cart.objects.CartItem;
 import com.github.simulatan.semesterprojekt_server.cart.utils.CartWebsocketRequest;
 import com.github.simulatan.semesterprojekt_server.product.objects.Product;
-import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.oidc.runtime.OidcJwtCallerPrincipal;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.unchecked.Unchecked;
 import net.jodah.expiringmap.ExpiringMap;
+import org.jboss.resteasy.reactive.RestForm;
 import org.jose4j.jwt.MalformedClaimException;
 
 import javax.inject.Inject;
 import javax.transaction.Transactional;
+import javax.ws.rs.DefaultValue;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.core.Response;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -49,6 +55,30 @@ public class CartManager {
 		return cartId;
 	}
 
+	@POST
+	@Path("/add")
+	@Transactional
+	@Authenticated
+	public Uni<Response> addToCart(@RestForm long productId, @RestForm @DefaultValue("1") int amount) throws MalformedClaimException {
+		if (productId == 0) throw new NotFoundException("Product not found");
+		UUID userId = UUID.fromString(((OidcJwtCallerPrincipal) identity.getPrincipal()).getClaims().getSubject());
+		return Product.findById(productId)
+			.onItem().ifNull().failWith(() -> new NotFoundException("Product not found"))
+			.onItem().transformToUni(product -> Cart.find("userId", userId)
+				.firstResult()
+				.onItem().ifNull().switchTo(() -> createCart(userId))
+				.onItem().transformToUni(cart -> Panache.withTransaction(new CartItem((Cart) cart, (Product) product, amount)::persist))
+				.map(result -> Unchecked.supplier(() -> mapper.writeValueAsString(result)).get())
+				.map(r -> Response.ok(r).build())
+			);
+	}
+
+	private Uni<Cart> createCart(UUID userId) {
+		Cart result = new Cart();
+		result.userId = userId;
+		return result.persist();
+	}
+
 	private String generateCartId() {
 		String cartId = UUID.randomUUID().toString();
 		while (cartIdToUserId.containsKey(cartId)) {
@@ -66,30 +96,6 @@ public class CartManager {
 		}
 		CartItem.delete("cart_id", context.cart.id).await().indefinitely();
 		context.send("clear", CartResponseCode.CART_CLEARED);
-	}
-
-	@Transactional
-	public void addToCart(CartWebsocketRequest session, long productId) {
-		UUID userId = session.userId;
-		if (userId == null) {
-			session.error(401, "No user found");
-			return;
-		}
-		Product product = (Product) Product.findById(productId).await().indefinitely();
-		if (product == null) {
-			session.send("add", CartResponseCode.PRODUCT_NOT_FOUND);
-			return;
-		}
-		CartItem item = new CartItem(session.cart, product, session.request.has("amount") ? session.request.getInt("amount") : 1);
-		var result = Panache.withTransaction(item::persist).await().indefinitely();
-		try {
-			session.send("add", Arc.container()
-				.instance(ObjectMapper.class)
-				.get()
-				.writeValueAsString(result));
-		} catch (JsonProcessingException e) {
-			throw new RuntimeException(e);
-		}
 	}
 
 	public void removeFromCart(CartWebsocketRequest session, long cartItemId) {

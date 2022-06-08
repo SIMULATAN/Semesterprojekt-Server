@@ -1,18 +1,16 @@
 package com.github.simulatan.semesterprojekt_server.user;
 
-import javax.inject.Inject;
-import javax.ws.rs.GET;
-import javax.ws.rs.NotAuthorizedException;
-import javax.ws.rs.Path;
-
 import io.quarkus.oidc.runtime.OidcJwtCallerPrincipal;
 import io.quarkus.security.identity.SecurityIdentity;
-import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.NoCache;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.json.JSONObject;
 
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.NotAuthorizedException;
+import javax.ws.rs.Path;
 import java.util.UUID;
 
 @Path("/api/users")
