@@ -1,0 +1,29 @@
+@startuml
+!define table(x) class x << (T,#FFAAAA) >>
+!define primary_key(x) <u>x</u>
+!define string(x) x: String
+!define uuid(x) x: UUID
+!define int(x) x: int
+
+hide methods
+hide stereotypes
+
+table(cart) {
+	primary_key(id)
+	uuid(user_id)
+}
+
+table(cart_item) {
+	int(cart_id)
+	int(product_id)
+	int(quantity)
+}
+
+table(product) {
+	primary_key(id)
+	...
+}
+
+cart_item <-- cart
+cart_item <-- product
+@enduml
