@@ -26,6 +26,7 @@ import javax.ws.rs.core.Response;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Path("/api/cart")
 public class CartManager {
@@ -62,14 +63,29 @@ public class CartManager {
 	public Uni<Response> addToCart(@RestQuery("product_id") long productId, @RestQuery @DefaultValue("1") int amount) throws MalformedClaimException {
 		if (productId == 0) throw new NotFoundException("Product not found");
 		UUID userId = UUID.fromString(((OidcJwtCallerPrincipal) identity.getPrincipal()).getClaims().getSubject());
+		AtomicReference<Cart> cartReference = new AtomicReference<>();
+		AtomicReference<Boolean> isNew = new AtomicReference<>(false);
 		return Product.findById(productId)
 			.onItem().ifNull().failWith(() -> new NotFoundException("Product not found"))
+			.map(Product.class::cast)
 			.onItem().transformToUni(product -> Cart.find("userId", userId)
 				.firstResult()
 				.onItem().ifNull().switchTo(() -> createCart(userId))
-				.onItem().transformToUni(cart -> Panache.withTransaction(new CartItem((Cart) cart, (Product) product, amount)::persist))
+				.map(Cart.class::cast)
+				.invoke(cartReference::set)
+				.onItem().transformToUni(cart -> CartItem.find("cart_id = ?1 and product_id = ?2", cart.id, product.id).firstResult()
+					.onItem().ifNull().switchTo(() -> {isNew.set(true); return Panache.withTransaction(new CartItem(cart, product, amount)::persist);})
+					.map(CartItem.class::cast)
+					.onItem().transformToUni(l -> {
+						if (isNew.get()) return Uni.createFrom().item(l);
+						return updateQuantity(l.quantity += amount, l.id, cart.id)
+							.onItem().ifNotNull().transform(i -> i > 0 ? l : null);}))
 				.map(result -> Unchecked.supplier(() -> mapper.writeValueAsString(result)).get())
-				.invoke(m -> CartWebsocket.broadcast(userId, "{\"action\":\"add\"" + ",\"data\":" + m + "}"))
+				.call(l -> CartItem.find("cart_id", cartReference.get().id)
+					.list()
+					.invoke(m -> CartWebsocket.broadcast(userId, "{\"action\":\"list\",\"data\":" +
+						Unchecked.supplier(() -> mapper.writeValueAsString(m)).get() +
+						"}")))
 				.map(r -> Response.ok(r).build())
 			);
 	}
@@ -77,7 +93,7 @@ public class CartManager {
 	private Uni<Cart> createCart(UUID userId) {
 		Cart result = new Cart();
 		result.userId = userId;
-		return result.persist();
+		return Panache.withTransaction(result::persist);
 	}
 
 	private String generateCartId() {
@@ -138,11 +154,15 @@ public class CartManager {
 			context.error(401, "No user found");
 			return;
 		}
-		var result = Panache.withTransaction(() -> CartItem.update("quantity = ?1 where id = ?2 and cart_id = ?3", newQuantity, cartItemId, context.cart.id)).await().indefinitely();
+		var result = updateQuantity(newQuantity, cartItemId, context.cart.id).await().indefinitely();
 		if (result > 0)
 			context.send("update_quantity",
 				// work around stupid checked exceptions
 				Unchecked.supplier(() -> mapper.writeValueAsString(CartItem.findById(cartItemId).await().indefinitely())).get()
 			);
+	}
+
+	private Uni<Integer> updateQuantity(int newQuantity, long cartItemId, long cartId) {
+		return Panache.withTransaction(() -> CartItem.update("quantity = ?1 where id = ?2 and cart_id" + " = ?3", newQuantity, cartItemId, cartId));
 	}
 }

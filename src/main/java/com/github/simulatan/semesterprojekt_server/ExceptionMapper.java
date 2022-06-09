@@ -10,6 +10,7 @@ import javax.ws.rs.core.Response;
 public class ExceptionMapper {
 	@ServerExceptionMapper
 	public Response mapExceptionToResponse(Exception exception) {
+		exception.printStackTrace();
 		if (exception instanceof WebApplicationException ex) {
 			return ex.getResponse();
 		}
