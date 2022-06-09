@@ -55,6 +55,14 @@ public class CartWebsocket {
 		sessions.computeIfAbsent((UUID) session.getUserProperties().get("user_id"), k -> new ArrayList<>()).add(session);
 	}
 
+	@OnClose
+	public void onClose(Session session) {
+		sessions.computeIfPresent((UUID) session.getUserProperties().get("user_id"), (k, v) -> {
+			v.remove(session);
+			return v;
+		});
+	}
+
 	@OnMessage
 	@Transactional
 	public void onMessage(Session session, String message) {
@@ -71,9 +79,10 @@ public class CartWebsocket {
 				return;
 			}
 
+			JSONObject data = json.has("data") ? json.getJSONObject("data") : null;
 			switch (action) {
-				case "remove" -> manager.removeFromCart(context, json.getLong("cart_item_id"));
-				case "update_quantity" -> manager.updateQuantity(context, json.getInt("new_quantity"), json.getLong("cart_item_id"));
+				case "remove" -> manager.removeFromCart(context, data.getLong("cart_item_id"));
+				case "update_quantity" -> manager.updateQuantity(context, data.getInt("new_quantity"), data.getLong("cart_item_id"));
 				default -> context.error(404, "Unknown Action");
 			}
 		}
@@ -82,10 +91,14 @@ public class CartWebsocket {
 	@OnError
 	public void error(Session session, Throwable exception) {
 		LOGGER.error("WebSocket error", exception);
-		session.getAsyncRemote().sendText("{\"error\":true,\"class\":\"" + exception.getClass().getName() + "\",\"message\":\"" + exception.getMessage() + "\"}");
+		session.getAsyncRemote().sendText("{\"error\":true,\"class\":\"" + exception.getClass().getName() + "\",\"message\":\"" + exception.getMessage().replace("\"", "\\\"") + "\"}");
 	}
 
 	public static void broadcast(UUID userId, String message) {
-		sessions.get(userId).forEach(s -> s.getAsyncRemote().sendText(message));
+		List<Session> sessions1 = sessions.get(userId);
+		if (sessions1 == null) {
+			return;
+		}
+		sessions1.forEach(s -> s.getAsyncRemote().sendText(message));
 	}
 }

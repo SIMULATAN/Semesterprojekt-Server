@@ -13,7 +13,7 @@ import io.quarkus.security.identity.SecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.unchecked.Unchecked;
 import net.jodah.expiringmap.ExpiringMap;
-import org.jboss.resteasy.reactive.RestForm;
+import org.jboss.resteasy.reactive.RestQuery;
 import org.jose4j.jwt.MalformedClaimException;
 
 import javax.inject.Inject;
@@ -59,7 +59,7 @@ public class CartManager {
 	@Path("/add")
 	@Transactional
 	@Authenticated
-	public Uni<Response> addToCart(@RestForm long productId, @RestForm @DefaultValue("1") int amount) throws MalformedClaimException {
+	public Uni<Response> addToCart(@RestQuery("product_id") long productId, @RestQuery @DefaultValue("1") int amount) throws MalformedClaimException {
 		if (productId == 0) throw new NotFoundException("Product not found");
 		UUID userId = UUID.fromString(((OidcJwtCallerPrincipal) identity.getPrincipal()).getClaims().getSubject());
 		return Product.findById(productId)
@@ -69,6 +69,7 @@ public class CartManager {
 				.onItem().ifNull().switchTo(() -> createCart(userId))
 				.onItem().transformToUni(cart -> Panache.withTransaction(new CartItem((Cart) cart, (Product) product, amount)::persist))
 				.map(result -> Unchecked.supplier(() -> mapper.writeValueAsString(result)).get())
+				.invoke(m -> CartWebsocket.broadcast(userId, "{\"action\":\"add\"" + ",\"data\":" + m + "}"))
 				.map(r -> Response.ok(r).build())
 			);
 	}
@@ -127,12 +128,21 @@ public class CartManager {
 	}
 
 	public void updateQuantity(CartWebsocketRequest context, int newQuantity, long cartItemId) {
+		if (newQuantity < 0) throw new IllegalArgumentException("Quantity must be positive");
+		if (newQuantity == 0) {
+			removeFromCart(context, cartItemId);
+			return;
+		}
 		UUID userId = context.userId;
 		if (userId == null) {
 			context.error(401, "No user found");
 			return;
 		}
 		var result = Panache.withTransaction(() -> CartItem.update("quantity = ?1 where id = ?2 and cart_id = ?3", newQuantity, cartItemId, context.cart.id)).await().indefinitely();
-		context.send("update_quantity", result > 0 ? CartResponseCode.CART_ITEM_UPDATED : CartResponseCode.CART_ITEM_NOT_UPDATED);
+		if (result > 0)
+			context.send("update_quantity",
+				// work around stupid checked exceptions
+				Unchecked.supplier(() -> mapper.writeValueAsString(CartItem.findById(cartItemId).await().indefinitely())).get()
+			);
 	}
 }
