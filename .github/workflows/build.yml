@@ -40,6 +40,7 @@ jobs:
           version: latest
           java-version: 17
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          components: native-image
 
       - name: Build Gradle Project
         uses: gradle/gradle-build-action@v2
