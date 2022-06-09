@@ -34,9 +34,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          version: latest
+          java-version: 17
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Gradle Project
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: build -Dquarkus.package.type=native
+
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
           context: .
+          file: {context}/src/main/docker/Dockerfile.native
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.metadata.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha
